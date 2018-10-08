@@ -5,11 +5,10 @@ import os
 import sys
 import re
 
-"""This method pulls out the headers from a given AMR_matrix and a SNP_metadata file and 
-pulls out the common headers between the two"""
-
 
 def header_collect(amr_matrix, snp_metadata):
+    """This method reads in the headers from a given AMR_matrix and a SNP_metadata file and
+    pulls out the common headers between the two along with the info associated with the gene"""
     matrix_headers = {}
     snp_headers = {}
     temp_list = []
@@ -19,23 +18,27 @@ def header_collect(amr_matrix, snp_metadata):
         for row in reader:
             if row != []:
                 matrix_headers[row[0]] = ''
+    csvfile.close()
     with open(snp_metadata, 'r') as csvfile: # pulls the headers from the SNP_metadata, delimiting by comma
         reader = csv.reader(csvfile, delimiter=',')
         csvfile.readline()
         for row in reader:
             if row != []:
                 if matrix_headers.__contains__(row[0]):  # pulls out the headers if they are contained in the AMR_matrix
-                    temp_list.append([row[2], row[3], row[5], row[10]]) # pulls out start/stop index & mutant type amino acid & sequence
+                    temp_list.append([row[2], row[3], row[4], row[5], row[10]]) # pulls out start/stop index & wild/mutant type amino acid & sequence
                     snp_headers[row[0]] = temp_list
+    csvfile.close()
     return snp_headers
 
 
-def cigar_int_list(cig_list):
-    """Convert int strings in the cigar_list to int and put them into a list"""
-    int_list = []
-    for x in cig_list[::2]:
-        int_list.append(int(x))
-    return int_list
+def start_stop_to_one_based(dictionary):
+    """Convert start/stop indices given by the SNP metadata to int instead of str,
+    and add one to make them 1 based instead of 0 based"""
+    for lists in dictionary:
+        for each_list in range(len(dictionary[lists])):
+            for start_stop in range(0, 2):
+                dictionary[lists][each_list][start_stop] = (int(dictionary[lists][each_list][start_stop]))+1
+    return dictionary
 
 
 def cigar_str_list(cig_list):
@@ -46,22 +49,31 @@ def cigar_str_list(cig_list):
     return str_list
 
 
-def cigar_count(cig_int_list):
+def cigar_int_list(cig_list):
+    """Convert int strings in the cigar_list to int and put them into a list"""
+    int_list = []
+    for x in cig_list[::2]:
+        int_list.append(int(x))
+    return int_list
+
+
+def cigar_count(cig_str, cig_int):
     """Count of how long the sequence should be based on the given cigar string"""
-    i = 0
-    for x in cig_int_list:
-        i += x
-    return i
-
-
-def start_stop_to_int(dictionary):
-    """Convert start/stop indices given by the SNP metadata to int instead of str,
-    and add one to make them 1 based instead of 0 based"""
-    for lists in dictionary:
-        for each_list in range(len(dictionary[lists])):
-            for start_stop in range(0, 2):
-                dictionary[lists][each_list][start_stop] = (int(dictionary[lists][each_list][start_stop]))+1
-    return dictionary
+    count = 0
+    y = 0
+    for x in cig_str:
+        if x == 'M':
+            count += (cig_int[y])
+        elif x == 'I':
+            count += (cig_int[y])
+        elif x == 'S':
+            count += (cig_int[y])
+        elif x == '=':
+            count += (cig_int[y])
+        elif x == 'X':
+            count += (cig_int[y])
+        y += 1
+    return count
 
 
 def protein_identifier(ref_codon):
@@ -83,10 +95,32 @@ def protein_identifier(ref_codon):
         'TAC':'Y', 'TAT':'Y', 'TAA':'_', 'TAG':'_',
         'TGC':'C', 'TGT':'C', 'TGA':'_', 'TGG':'W',
     }
-    codon = ""
-    for i in range(0, len(ref_codon)):
+    codon = ''
+    for i in ref_codon:
         codon += i
     return table[codon]
+
+
+def count_table_subtract(sample_file, amr_matrix, snp_metadata):
+    """This method subtracts from the count table when a mutation is found at a SNP location"""
+    sample_no = list(filter(None, re.split('(\d+)', sample_file)))
+    column_no = int(sample_no[1])
+    snp_headers = {}
+    with open(snp_metadata, 'r') as csvfile:  # pulls the headers from the SNP_metadata, delimiting by comma
+        reader = csv.reader(csvfile, delimiter=',')
+        csvfile.readline()
+        for row in reader:
+            if row != []:
+                    snp_headers[row[0]] = ''
+    csvfile.close()
+    with open(amr_matrix, 'r') as csvfile:  # pulls the headers from the AMR_matrix, delimiting by comma
+        reader = csv.reader(csvfile, delimiter=',')
+        csvfile.readline()
+        for row in reader:
+            if row != []:
+                if snp_headers.__contains__(row[0]):  # subtracts count if the header is present SNP_metadata
+                    row[column_no] -= 1
+    csvfile.close()
 
 
 class SamParser:
@@ -143,7 +177,8 @@ class SamParser:
         if not value:  # close file on EOF
             if not self.stdin:
                 self.sam_file.close()
-            print("{0} with both mates mapped out of {1} total reads\n".format(self.reads_mapping, self.reads_total))
+            # Steven had this print but I do not believe it necessary
+            # print("{0} with both mates mapped out of {1} total reads\n".format(self.reads_mapping, self.reads_total))
             raise StopIteration()
         else:
             return value
@@ -152,7 +187,7 @@ class SamParser:
 if __name__ == '__main__':
     S = SamParser(sys.argv[1])
     snp_data = header_collect(sys.argv[2], sys.argv[3])  # call the method above with command line arguments
-    snp_data = start_stop_to_int(snp_data)
+    snp_data = start_stop_to_one_based(snp_data)
     set()
     values = S.next()
     while values:
@@ -160,47 +195,61 @@ if __name__ == '__main__':
             cigar_list = list(filter(None, re.split('(\d+)', values[3])))  # get cigar string and divide it into numbers/letters
             cigar_int = cigar_int_list(cigar_list)
             cigar_str = cigar_str_list(cigar_list)
-            cigar_total = cigar_count(cigar_int)
+            read_length = cigar_count(cigar_str, cigar_int)
             for x in snp_data:
                 for y in range(0, len(snp_data[x])):
-                    if (int(values[2]) <= (snp_data[x][y][0])) and (int(values[2])+cigar_total >= (snp_data[x][y][1])):
-                        start_index = (snp_data[x][y][0]-int(values[2]))
-                        stop_index = ((snp_data[x][y][0]-int(values[2]))+(snp_data[x][y][1]-snp_data[x][y][0]))
-                        data_base = list(snp_data[x][y][3][(snp_data[x][y][0]):(snp_data[x][y][1])])
-                        read = list(values[4][start_index:stop_index])
+                    start_index_both = int(values[2])
+                    stop_index_both = int(values[2]) + read_length
+                    start_snp = snp_data[x][y][0]
+                    stop_snp = snp_data[x][y][1]
+                    if (start_index_both <= start_snp) and (stop_index_both >= stop_snp):
+                        data_base = list(snp_data[x][y][4][start_index_both:stop_index_both])
+                        read = list(values[4])
                         for operator in cigar_str:
-                            if operator == 'M':
-                                print('')
-                            elif operator == 'X':
-                                print('')
-                            elif operator == '=':
-                                print('')
-                            elif operator == 'I':
-                                print('')
-                            elif operator == 'S':
-                                print('')
-                            elif operator == 'H':
-                                print('')
-                            elif operator == 'P':
-                                print('')
+                            if operator == 'I':
+                                loops = cigar_int[cigar_str.index('I')]
+                                index = 0
+                                for c in range(0, cigar_str.index('I')):
+                                    index += cigar_int[c]
+                                while loops > 0:
+                                    data_base.insert(index+1, '')
+                                    loops -= 1
+                            elif operator == 'D':
+                                loops = cigar_int[cigar_str.index('D')]
+                                index = 0
+                                for c in range(0, cigar_str.index('D') - 1):
+                                    index += cigar_int[c]
+                                while loops > 0:
+                                    read.insert(index + 1, '')
+                                    loops -= 1
+                            elif operator == 'N':
+                                loops = cigar_int[cigar_str.index('N')]
+                                index = 0
+                                for c in range(0, cigar_str.index('N') - 1):
+                                    index += cigar_int[c]
+                                while loops > 0:
+                                    read.insert(index + 1, '')
+                                    loops -= 1
+                        data_base_snp = data_base[(start_snp-start_index_both):(start_snp-start_index_both)+(snp_data[x][y][1]-snp_data[x][y][0])]
+                        read_snp = read[(start_snp-start_index_both):(start_snp-start_index_both)+(snp_data[x][y][1]-snp_data[x][y][0])]
 
                         for z in range(0, (snp_data[x][y][1]-snp_data[x][y][0])):
-                            if data_base[z] == 'A':
-                                if read[z] != 'T':
-                                    if protein_identifier(read) == snp_data[2]:
-                                        print('Mutation Found')
-                            elif data_base[z] == 'T':
-                                if read[z] != 'A':
-                                    if protein_identifier(read) == snp_data[2]:
-                                        print('Mutation Found')
-                            elif data_base[z] == 'G':
-                                if read[z] != 'C':
-                                    if protein_identifier(read) == snp_data[2]:
-                                        print('Mutation Found')
-                            elif data_base[z] == 'C':
-                                if read[z] != 'G':
-                                    if protein_identifier(read) == snp_data[2]:
-                                        print('Mutation Found')
+                            if data_base_snp[z] == 'A':
+                                if read_snp[z] != 'A':
+                                    if protein_identifier(read_snp) != snp_data[x][y][2]:
+                                        count_table_subtract(sys.argv[1], sys.argv[2], sys.argv[3])
+                            elif data_base_snp[z] == 'T':
+                                if read_snp[z] != 'T':
+                                    if protein_identifier(read_snp) != snp_data[x][y][2]:
+                                        count_table_subtract(sys.argv[1], sys.argv[2], sys.argv[3])
+                            elif data_base_snp[z] == 'G':
+                                if read_snp[z] != 'G':
+                                    if protein_identifier(read_snp) != snp_data[x][y][2]:
+                                        count_table_subtract(sys.argv[1], sys.argv[2], sys.argv[3])
+                            elif data_base_snp[z] == 'C':
+                                if read_snp[z] != 'C':
+                                    if protein_identifier(read_snp) != snp_data[x][y][2]:
+                                        count_table_subtract(sys.argv[1], sys.argv[2], sys.argv[3])
 
         try:
             values = S.next()
