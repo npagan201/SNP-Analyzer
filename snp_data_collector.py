@@ -287,7 +287,7 @@ if __name__ == '__main__':
     snp_data = header_collect(sys.argv[2], sys.argv[3])  # call the method above with command line arguments
     snp_data = start_stop_to_one_based(snp_data)
     snp_overlap = False
-    flag = int(sys.argv[4])
+    flag = str(sys.argv[4])
     set()
     values = S.next()
     while values:
@@ -355,7 +355,7 @@ if __name__ == '__main__':
                 count_table_zero(sys.argv[2], sys.argv[3])
             break
 
-    if flag == 1:
+    if flag == 'long':
         long_form_table_create(sys.argv[2])
 
 
