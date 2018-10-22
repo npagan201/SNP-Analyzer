@@ -31,6 +31,92 @@ def header_collect(amr_matrix, snp_metadata):
     return snp_headers
 
 
+def count_table_subtract(amr_matrix, snp_metadata):
+    """This method subtracts from the count table when a mutation is found at a SNP location"""
+    sample_no = os.path.splitext(os.path.basename(sys.argv[1]))
+    snp_headers = {}
+    with open(snp_metadata, 'r') as csvfile:  # pulls the headers from the SNP_metadata, delimiting by comma
+        reader = csv.reader(csvfile, delimiter=',')
+        csvfile.readline()
+        for row in reader:
+            if row != []:
+                    snp_headers[row[0]] = ''
+    csvfile.close()
+
+    new_rows = []
+    with open(amr_matrix, 'r') as read_csvfile:  # pulls the headers from the AMR_matrix, delimiting by comma
+        reader = csv.reader(read_csvfile, delimiter=',')
+        row1 = next(reader)
+        column_no = (row1.index(sample_no[0])) + 1
+        new_rows.append(row1)
+        for row in reader:
+            if row != []:
+                if snp_headers.__contains__(row[0]):  # subtracts count if the header is present SNP_metadata
+                    row[column_no] = int(row[column_no])
+                    row[column_no] -= 1
+                new_rows.append(row)
+
+    with open(amr_matrix, 'w', newline='') as write_csvfile:
+        edit = csv.writer(write_csvfile, delimiter=',')
+        edit.writerows(new_rows)
+    write_csvfile.close()
+    read_csvfile.close()
+
+
+def count_table_zero(amr_matrix, snp_metadata):
+    """This method sets the count table to zero"""
+    sample_no = os.path.splitext(os.path.basename(sys.argv[1]))
+    snp_headers = {}
+    with open(snp_metadata, 'r') as csvfile:  # pulls the headers from the SNP_metadata, delimiting by comma
+        reader = csv.reader(csvfile, delimiter=',')
+        csvfile.readline()
+        for row in reader:
+            if row != []:
+                    snp_headers[row[0]] = ''
+    csvfile.close()
+
+    new_rows = []
+    with open(amr_matrix, 'r') as read_csvfile:  # pulls the headers from the AMR_matrix, delimiting by comma
+        reader = csv.reader(read_csvfile, delimiter=',')
+        row1 = next(reader)
+        column_no = (row1.index(sample_no[0])) + 1
+        new_rows.append(row1)
+        for row in reader:
+            if row != []:
+                if snp_headers.__contains__(row[0]):  # subtracts count if the header is present SNP_metadata
+                    row[column_no] = int(row[column_no])
+                    row[column_no] = 0
+                new_rows.append(row)
+    with open(amr_matrix, 'w', newline='') as write_csvfile:
+        edit = csv.writer(write_csvfile, delimiter=',')
+        edit.writerows(new_rows)
+    read_csvfile.close()
+    write_csvfile.close()
+
+
+def long_form_table_create(amr_matrix):
+    """This method creates a long form file of the count table"""
+    new_rows = []
+    with open(amr_matrix, 'r') as read_csvfile:
+        reader = csv.reader(read_csvfile, delimiter=',')
+        row0 = ['Sample', 'Gene', 'Hits', 'Gene Fraction']
+        new_rows.append(row0)
+        row1 = next(reader)
+        for column in range(len(row1)-1):
+            num = column + 1
+            read_csvfile.seek(0)
+            read_csvfile.readline()
+            for row in reader:
+                row = [row1[column], row[0], row[num], 99]
+                new_rows.append(row)
+
+    with open("long_HMM.tsv", 'w', newline='') as write_tsvfile:
+        edit = csv.writer(write_tsvfile, delimiter='\t')
+        edit.writerows(new_rows)
+    write_tsvfile.close()
+    read_csvfile.close()
+
+
 def start_stop_to_one_based(dictionary):
     """Convert start/stop indices given by the SNP metadata to int instead of str,
     and add one to make them 1 based instead of 0 based"""
@@ -76,6 +162,40 @@ def cigar_count(cig_str, cig_int):
     return count
 
 
+def cig_edit_read(read, cigar_str, cigar_int):
+    for operator in cigar_str:
+        if operator == 'D':
+            loops = cigar_int[cigar_str.index('D')]
+            index = 0
+            for x in range(0, cigar_str.index('D')):
+                index += cigar_int[x]
+            while loops > 0:
+                read.insert(index, '')
+                loops -= 1
+        elif operator == 'N':
+            loops = cigar_int[cigar_str.index('N')]
+            index = 0
+            for x in range(0, cigar_str.index('N')):
+                index += cigar_int[x]
+            while loops > 0:
+                read.insert(index, '')
+                loops -= 1
+    return read
+
+
+def cig_edit_data_base(data_base, cigar_str, cigar_int):
+    for operator in cigar_str:
+        if operator == 'I':
+            loops = cigar_int[cigar_str.index('I')]
+            index = 0
+            for x in range(0, cigar_str.index('I')):
+                index += cigar_int[x]
+            while loops > 0:
+                data_base.insert(index, '')
+                loops -= 1
+    return data_base
+
+
 def protein_identifier(ref_codon):
     table = {
         'ATA':'I', 'ATC':'I', 'ATT':'I', 'ATG':'M',
@@ -99,28 +219,6 @@ def protein_identifier(ref_codon):
     for i in ref_codon:
         codon += i
     return table[codon]
-
-
-def count_table_subtract(sample_file, amr_matrix, snp_metadata):
-    """This method subtracts from the count table when a mutation is found at a SNP location"""
-    sample_no = list(filter(None, re.split('(\d+)', sample_file)))
-    column_no = int(sample_no[1])
-    snp_headers = {}
-    with open(snp_metadata, 'r') as csvfile:  # pulls the headers from the SNP_metadata, delimiting by comma
-        reader = csv.reader(csvfile, delimiter=',')
-        csvfile.readline()
-        for row in reader:
-            if row != []:
-                    snp_headers[row[0]] = ''
-    csvfile.close()
-    with open(amr_matrix, 'r') as csvfile:  # pulls the headers from the AMR_matrix, delimiting by comma
-        reader = csv.reader(csvfile, delimiter=',')
-        csvfile.readline()
-        for row in reader:
-            if row != []:
-                if snp_headers.__contains__(row[0]):  # subtracts count if the header is present SNP_metadata
-                    row[column_no] -= 1
-    csvfile.close()
 
 
 class SamParser:
@@ -188,6 +286,8 @@ if __name__ == '__main__':
     S = SamParser(sys.argv[1])
     snp_data = header_collect(sys.argv[2], sys.argv[3])  # call the method above with command line arguments
     snp_data = start_stop_to_one_based(snp_data)
+    snp_overlap = False
+    flag = int(sys.argv[4])
     set()
     values = S.next()
     while values:
@@ -203,56 +303,59 @@ if __name__ == '__main__':
                     start_snp = snp_data[x][y][0]
                     stop_snp = snp_data[x][y][1]
                     if (start_index_both <= start_snp) and (stop_index_both >= stop_snp):
+                        snp_overlap = True
+
                         data_base = list(snp_data[x][y][4][start_index_both:stop_index_both])
                         read = list(values[4])
-                        for operator in cigar_str:
-                            if operator == 'I':
-                                loops = cigar_int[cigar_str.index('I')]
-                                index = 0
-                                for c in range(0, cigar_str.index('I')):
-                                    index += cigar_int[c]
-                                while loops > 0:
-                                    data_base.insert(index+1, '')
-                                    loops -= 1
-                            elif operator == 'D':
-                                loops = cigar_int[cigar_str.index('D')]
-                                index = 0
-                                for c in range(0, cigar_str.index('D') - 1):
-                                    index += cigar_int[c]
-                                while loops > 0:
-                                    read.insert(index + 1, '')
-                                    loops -= 1
-                            elif operator == 'N':
-                                loops = cigar_int[cigar_str.index('N')]
-                                index = 0
-                                for c in range(0, cigar_str.index('N') - 1):
-                                    index += cigar_int[c]
-                                while loops > 0:
-                                    read.insert(index + 1, '')
-                                    loops -= 1
+
+                        data_base = cig_edit_data_base(data_base, cigar_str, cigar_int)
+                        read = cig_edit_read(read, cigar_str, cigar_int)
+
                         data_base_snp = data_base[(start_snp-start_index_both):(start_snp-start_index_both)+(snp_data[x][y][1]-snp_data[x][y][0])]
                         read_snp = read[(start_snp-start_index_both):(start_snp-start_index_both)+(snp_data[x][y][1]-snp_data[x][y][0])]
 
+                        no_spaces = True
+
                         for z in range(0, (snp_data[x][y][1]-snp_data[x][y][0])):
-                            if data_base_snp[z] == 'A':
-                                if read_snp[z] != 'A':
-                                    if protein_identifier(read_snp) != snp_data[x][y][2]:
-                                        count_table_subtract(sys.argv[1], sys.argv[2], sys.argv[3])
-                            elif data_base_snp[z] == 'T':
-                                if read_snp[z] != 'T':
-                                    if protein_identifier(read_snp) != snp_data[x][y][2]:
-                                        count_table_subtract(sys.argv[1], sys.argv[2], sys.argv[3])
-                            elif data_base_snp[z] == 'G':
-                                if read_snp[z] != 'G':
-                                    if protein_identifier(read_snp) != snp_data[x][y][2]:
-                                        count_table_subtract(sys.argv[1], sys.argv[2], sys.argv[3])
-                            elif data_base_snp[z] == 'C':
-                                if read_snp[z] != 'C':
-                                    if protein_identifier(read_snp) != snp_data[x][y][2]:
-                                        count_table_subtract(sys.argv[1], sys.argv[2], sys.argv[3])
+                            if (data_base_snp[z] == '') or (read_snp[z] == ''):
+                                count_table_subtract(sys.argv[2], sys.argv[3])
+                                no_spaces = False
+                                break
+
+                        if(no_spaces == True):
+                            for z in range(0, (snp_data[x][y][1]-snp_data[x][y][0])):
+                                if (data_base_snp[z] == '') or (read_snp[z] == ''):
+                                    count_table_subtract(sys.argv[2], sys.argv[3])
+                                    break
+                                elif data_base_snp[z] == 'A':
+                                    if read_snp[z] != 'A':
+                                        if protein_identifier(read_snp) != snp_data[x][y][2]:
+                                            count_table_subtract(sys.argv[2], sys.argv[3])
+                                            break
+                                elif data_base_snp[z] == 'T':
+                                    if read_snp[z] != 'T':
+                                        if protein_identifier(read_snp) != snp_data[x][y][2]:
+                                            count_table_subtract(sys.argv[2], sys.argv[3])
+                                            break
+                                elif data_base_snp[z] == 'G':
+                                    if read_snp[z] != 'G':
+                                        if protein_identifier(read_snp) != snp_data[x][y][2]:
+                                            count_table_subtract(sys.argv[2], sys.argv[3])
+                                            break
+                                elif data_base_snp[z] == 'C':
+                                    if read_snp[z] != 'C':
+                                        if protein_identifier(read_snp) != snp_data[x][y][2]:
+                                            count_table_subtract(sys.argv[2], sys.argv[3])
+                                            break
 
         try:
             values = S.next()
         except StopIteration:
+            if snp_overlap == False:
+                count_table_zero(sys.argv[2], sys.argv[3])
             break
+
+    if flag == 1:
+        long_form_table_create(sys.argv[2])
+
 

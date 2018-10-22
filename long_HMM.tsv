@@ -1,0 +1,7 @@
+Sample	Gene	Hits	Gene Fraction
+S1	1234|AY139598.1|AY139598|betalactams|Class_D_betalactamases|OXA	10	99
+S1	Flq|NC_002952.2859949|Fluoroquinolones|Fluoroquinolone-resistant_DNA_topoisomerases|GYRA|RequiresSNPConfirmation	-3448	99
+S2	1234|AY139598.1|AY139598|betalactams|Class_D_betalactamases|OXA	20	99
+S2	Flq|NC_002952.2859949|Fluoroquinolones|Fluoroquinolone-resistant_DNA_topoisomerases|GYRA|RequiresSNPConfirmation	20	99
+S3	1234|AY139598.1|AY139598|betalactams|Class_D_betalactamases|OXA	30	99
+S3	Flq|NC_002952.2859949|Fluoroquinolones|Fluoroquinolone-resistant_DNA_topoisomerases|GYRA|RequiresSNPConfirmation	30	99
